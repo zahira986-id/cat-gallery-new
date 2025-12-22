@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Galerie de Chats</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+
+</head>
+
+<body>
+    <div class="container">
+        <nav class="navbar">
+            <div class="nav-brand">Cats Gallery</div>
+            <div class="nav-links">
+                <a href="index.html" class="nav-link active">Home</a>
+                <a href="about.html" class="nav-link">About</a>
+                <a href="contact.html" class="nav-link">Contact</a>
+            </div>
+            <div class="user-session-info" id="user-session-info" style="display: none;">
+                <div class="user-name-display">
+                    <i class="fas fa-user-circle"></i>
+                    <span id="username-display">User</span>
+                </div>
+                <div class="adoption-badge" id="adoption-count-badge">
+                    <i class="fas fa-heart"></i> Adopté <span id="adoption-count">0</span>
+                </div>
+            </div>
+            <div class="nav-auth">
+                <button id="btn-signup" class="btn btn-outline">Sign Up</button>
+                <button id="btn-login" class="btn btn-primary">Connection</button>
+                <button id="btn-logout" class="btn btn-danger" style="display: none;">Logout</button>
+            </div>
+        </nav>
+
+        <header>
+            <h1 style="margin-top: 20px;">Cats Gallery</h1>
+            <p class="subtitle">Une collection de chats adorables</p>
+            <div class="header-actions">
+
+                <button id="add-cat-btn" class="btn btn-add">
+                    <i class="fas fa-plus"></i> Ajouter un chat
+                </button>
+                <button id="reset-btn" class="btn btn-reset">
+                    <i class="fas fa-redo"></i> Réinitialiser
+                </button>
+                <div class="search-container">
+                    <select id="tag-filter" class="search-input" style="width: 150px; cursor: pointer;">
+                        <option value="">Tous les tags</option>
+                    </select>
+                    <input type="text" id="cat-search" placeholder="Rechercher un chat..." class="search-input">
+                    <button id="search-btn" class="btn btn-search"><i class="fas fa-search"></i></button>
+                </div>
+            </div>
+        </header>
+
+
+
+        <div id="gallery" class="gallery">
+            <!-- Les cartes de chats seront générées dynamiquement -->
+        </div>
+
+        <div id="pagination-controls" class="pagination-controls" style="display: none;">
+            <button id="prev-page" class="btn btn-secondary" disabled><i class="fas fa-chevron-left"></i>
+                Précédent</button>
+            <span id="page-info">Page 1 sur 1</span>
+            <button id="next-page" class="btn btn-secondary" disabled>Suivant <i
+                    class="fas fa-chevron-right"></i></button>
+        </div>
+
+        <!-- Formulaire modal pour ajouter/modifier un chat -->
+        <div id="cat-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="modal-title">Ajouter un nouveau chat</h2>
+                    <button class="close-btn">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="cat-form">
+                        <div class="form-group">
+                            <label for="cat-name">Nom du chat *</label>
+                            <input type="text" id="cat-name" name="name" required placeholder="Ex: Mistigri">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="cat-description">Description *</label>
+                            <textarea id="cat-description" name="description" required placeholder="Décrivez ce chat..."
+                                rows="3"></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="cat-tag">Tag *</label>
+                            <input type="text" id="cat-tag" name="tag" required placeholder="Ex: chaton, tigré, etc.">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="cat-image">URL de l'image</label>
+                            <input type="url" id="cat-image" name="image" placeholder="https://exemple.com/image.jpg">
+                            <small>Laissez vide pour une image par défaut</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="cat-details">Détails supplémentaires</label>
+                            <textarea id="cat-details" name="details" placeholder="Âge, race, personnalité..."
+                                rows="2"></textarea>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-cancel">Annuler</button>
+                            <button type="submit" class="btn btn-submit">Enregistrer</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal de confirmation de suppression -->
+        <div id="confirm-modal" class="modal">
+            <div class="modal-content confirm-modal">
+                <div class="modal-header">
+                    <h2>Confirmer la suppression</h2>
+                    <button class="close-btn">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p>Êtes-vous sûr de vouloir supprimer ce chat ? Cette action est irréversible.</p>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-cancel">Annuler</button>
+                        <button type="button" class="btn btn-delete-confirm">Supprimer</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Login Modal -->
+        <div id="login-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Connexion</h2>
+                    <button class="close-btn">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="login-form">
+                        <div class="form-group">
+                            <label for="login-email">Email</label>
+                            <input type="email" id="login-email" name="email" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="login-password">Mot de passe</label>
+                            <input type="password" id="login-password" name="password" required>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">Se connecter</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Register Modal -->
+        <div id="register-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Inscription</h2>
+                    <button class="close-btn">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="register-form">
+                        <div class="form-group">
+                            <label for="register-username">Nom d'utilisateur</label>
+                            <input type="text" id="register-username" name="username" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="register-email">Email</label>
+                            <input type="email" id="register-email" name="email" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="register-password">Mot de passe</label>
+                            <input type="password" id="register-password" name="password" required>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">S'inscrire</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal des chats adoptés -->
+        <div id="adopted-cats-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Mes Chats Adoptés</h2>
+                    <button class="close-btn">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="adopted-cats-list" class="adopted-cats-grid">
+                        <!-- Les chats adoptés seront chargés ici -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>Galerie de Chats &copy; 2025 - Tous droits réservés</p>
+            <p>Nombre de chats dans la galerie: <span id="cat-count">0</span></p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>

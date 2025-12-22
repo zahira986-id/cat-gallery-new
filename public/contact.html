@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact - Galerie de Chats</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="container">
+        <nav class="navbar">
+            <div class="nav-brand">Cats Gallery</div>
+            <div class="nav-links">
+                <a href="index.html" class="nav-link">Home</a>
+                <a href="about.html" class="nav-link">About</a>
+                <a href="contact.html" class="nav-link active">Contact</a>
+            </div>
+            <div class="nav-auth">
+                <button id="btn-signup" class="btn btn-outline">Sign Up</button>
+                <button id="btn-login" class="btn btn-primary">Connection</button>
+                <button id="btn-logout" class="btn btn-danger" style="display: none;">Logout</button>
+            </div>
+        </nav>
+
+        <header>
+            <h1 style="margin-top: 20px;">Contactez-nous</h1>
+            <p class="subtitle">Une question ? Une suggestion ? N'hésitez pas !</p>
+        </header>
+
+        <main
+            style="background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-width: 800px; margin: 0 auto;">
+            <form id="contact-form"
+                onsubmit="event.preventDefault(); alert('Message envoyé ! (Simulation)'); this.reset();">
+                <div class="form-group">
+                    <label for="name">Votre Nom</label>
+                    <input type="text" id="name" required placeholder="Jean Dupont">
+                </div>
+                <div class="form-group">
+                    <label for="email">Votre Email</label>
+                    <input type="email" id="email" required placeholder="jean@exemple.com">
+                </div>
+                <div class="form-group">
+                    <label for="message">Message</label>
+                    <textarea id="message" rows="5" required placeholder="Votre message ici..."></textarea>
+                </div>
+                <div class="form-actions" style="justify-content: center;">
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">Envoyer le message</button>
+                </div>
+            </form>
+        </main>
+
+        <footer>
+            <p>Galerie de Chats &copy; 2025 - Tous droits réservés</p>
+        </footer>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="login-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Connexion</h2>
+                <button class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="login-form">
+                    <div class="form-group">
+                        <label for="login-email">Email</label>
+                        <input type="email" id="login-email" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Mot de passe</label>
+                        <input type="password" id="login-password" name="password" required>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Se connecter</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Register Modal -->
+    <div id="register-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Inscription</h2>
+                <button class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="register-form">
+                    <div class="form-group">
+                        <label for="register-username">Nom d'utilisateur</label>
+                        <input type="text" id="register-username" name="username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-email">Email</label>
+                        <input type="email" id="register-email" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-password">Mot de passe</label>
+                        <input type="password" id="register-password" name="password" required>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">S'inscrire</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
