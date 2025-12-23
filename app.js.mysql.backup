@@ -1,0 +1,484 @@
+const express = require("express");
+const bodyParser = require("body-parser");
+const mysql = require("mysql");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const session = require("express-session");
+const MySQLStore = require("express-mysql-session")(session);
+
+const app = express();
+const port = process.env.PORT || 3000;
+const JWT_SECRET = "super_secret_cat_key_123"; // Should be in env var
+const SESSION_SECRET = "super_secret_session_key_456"; // Should be in env var
+
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
+
+app.use(express.static("public"));
+
+const pool = mysql.createPool({
+    host: "localhost",
+    user: "root",
+    password: "",
+    database: "nodejs",
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
+});
+
+// MySQL Session Store Configuration
+const sessionStore = new MySQLStore({
+    expiration: 86400000, // 1 day in milliseconds
+    createDatabaseTable: true,
+    schema: {
+        tableName: 'sessions',
+        columnNames: {
+            session_id: 'session_id',
+            expires: 'expires',
+            data: 'data',
+            user_id: 'user_id' // Added mapping
+        }
+    }
+}, pool);
+
+// Session Middleware
+app.use(session({
+    key: 'cat_gallery_session',
+    secret: SESSION_SECRET,
+    store: sessionStore,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        maxAge: 86400000, // 1 day
+        httpOnly: true,
+        secure: false // Set to true if using HTTPS
+    }
+}));
+
+// --- AUTHENTICATION ROUTES ---
+
+// Middleware to authenticate JWT
+function authenticateToken(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+    if (!token) {
+        return res.status(401).json({ error: "Access token required" });
+    }
+
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) {
+            return res.status(403).json({ error: "Invalid or expired token" });
+        }
+        req.user = user; // Attach user info to request
+        next();
+    });
+}
+
+// Register
+app.post("/register", (req, res) => {
+    const { username, email, password } = req.body;
+
+    // Basic validation
+    if (!username || !email || !password) {
+        return res.status(400).json({ error: "All fields are required" });
+    }
+
+    pool.getConnection((err, connection) => {
+        if (err) return res.status(500).json({ error: "DB connection error" });
+
+        // Check if user exists
+        connection.query("SELECT * FROM users WHERE email = ? OR username = ?", [email, username], (qErr, rows) => {
+            if (qErr) {
+                connection.release();
+                return res.status(500).json({ error: "Query error" });
+            }
+
+            if (rows.length > 0) {
+                connection.release();
+                return res.status(400).json({ error: "User already exists" });
+            }
+
+            // Hash password
+            bcrypt.hash(password, 10, (hashErr, hash) => {
+                if (hashErr) {
+                    connection.release();
+                    return res.status(500).json({ error: "Error hashing password" });
+                }
+
+                // Insert user
+                connection.query("INSERT INTO users (username, email, password) VALUES (?, ?, ?)",
+                    [username, email, hash], (insertErr, result) => {
+                        connection.release();
+                        if (insertErr) {
+                            return res.status(500).json({ error: "Error registering user" });
+                        }
+                        res.status(201).json({ message: "User registered successfully" });
+                    });
+            });
+        });
+    });
+});
+
+// Login
+app.post("/login", (req, res) => {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+        return res.status(400).json({ error: "All fields are required" });
+    }
+
+    pool.getConnection((err, connection) => {
+        if (err) return res.status(500).json({ error: "DB connection error" });
+
+        connection.query("SELECT * FROM users WHERE email = ?", [email], (qErr, rows) => {
+            connection.release();
+            if (qErr) return res.status(500).json({ error: "Query error" });
+
+            if (rows.length === 0) {
+                return res.status(401).json({ error: "Invalid credentials" });
+            }
+
+            const user = rows[0];
+
+            // Compare password
+            bcrypt.compare(password, user.password, (cmpErr, isMatch) => {
+                if (cmpErr || !isMatch) {
+                    return res.status(401).json({ error: "Invalid credentials" });
+                }
+
+                // Generate Token
+                const token = jwt.sign(
+                    { id: user.id, username: user.username, email: user.email },
+                    JWT_SECRET,
+                    { expiresIn: "1h" }
+                );
+
+                // Store user data in session
+                req.session.userId = user.id;
+                req.session.username = user.username;
+                req.session.email = user.email;
+                req.session.isAuthenticated = true;
+                // Explicitly set user_id for the DB column (must match config)
+                req.session.user_id = user.id;
+
+                res.json({
+                    message: "Login successful",
+                    token,
+                    user: { id: user.id, username: user.username, email: user.email }
+                });
+            });
+        });
+    });
+});
+
+// Cleanup Sessions (Force Logout from DB using JWT)
+app.post("/cleanup-sessions", authenticateToken, (req, res) => {
+    const userId = req.user.id;
+
+    pool.getConnection((err, connection) => {
+        if (err) return res.status(500).json({ error: "DB connection error" });
+
+        // Delete all sessions for this user
+        connection.query("DELETE FROM sessions WHERE user_id = ?", [userId], (qErr, result) => {
+            connection.release();
+            if (qErr) {
+                console.error("Cleanup error:", qErr);
+                return res.status(500).json({ error: "Error cleaning up sessions" });
+            }
+            console.log(`Cleaned up ${result.affectedRows} sessions for user ${userId}`);
+            res.json({ message: "Sessions cleaned up successfully" });
+        });
+    });
+});
+
+// Logout
+app.post("/logout", (req, res) => {
+    if (req.session) {
+        req.session.destroy((err) => {
+            if (err) {
+                return res.status(500).json({ error: "Failed to logout" });
+            }
+            res.clearCookie('cat_gallery_session');
+            res.json({ message: "Logout successful" });
+        });
+    } else {
+        res.json({ message: "No active session" });
+    }
+});
+
+// Get session status
+app.get("/session", (req, res) => {
+    if (req.session && req.session.isAuthenticated) {
+        res.json({
+            isAuthenticated: true,
+            user: {
+                id: req.session.userId,
+                username: req.session.username,
+                email: req.session.email
+            }
+        });
+    } else {
+        res.json({ isAuthenticated: false });
+    }
+});
+
+
+
+//Get Cats
+app.get("/cats", (req, res) => {
+    pool.getConnection((err, connection) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ error: "DB connection error" });
+        }
+
+        let query = "SELECT * FROM cats";
+        let queryParams = [];
+
+        if (req.query.search) {
+            query += " WHERE name LIKE ?";
+            queryParams.push(`%${req.query.search}%`);
+        }
+
+        if (req.query.tag) {
+            if (query.includes('WHERE')) {
+                query += " AND tag = ?";
+            } else {
+                query += " WHERE tag = ?";
+            }
+            queryParams.push(req.query.tag);
+        }
+
+        connection.query(query, queryParams, (err, rows) => {
+            connection.release();
+            if (err) {
+                console.error(err);
+                return res.status(500).json({ error: "DB query error" });
+            }
+            res.json(rows);
+        });
+    });
+});
+//Get Cat by ID
+app.get("/cats/:id", (req, res) => {
+    pool.getConnection((err, connection) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ error: "DB connection error" });
+        }
+        connection.query("SELECT * FROM cats WHERE id = ?", [req.params.id], (err, rows) => {//sql injection protection
+            connection.release();
+            if (err) {
+                console.error(err);
+                return res.status(500).json({ error: "DB query error" });
+            }
+            res.json(rows);
+        });
+    });
+});
+
+//Delete Cat by Id  
+app.delete("/cats/:id", (req, res) => {
+    pool.getConnection((err, connection) => {
+        if (err) {
+            console.error("DB connection error", err);
+            return res.status(500).json({ error: "DB connection error" });
+        }
+        connection.query("DELETE FROM cats WHERE id = ?", [req.params.id], (qErr, rows) => {
+            connection.release();
+            if (qErr) {
+                console.error(" query error", qErr);
+                return res.status(500).json({ error: " query error" });
+            }
+            res.json({ message: `Record Num :${req.params.id} deleted successfully` });
+        });
+    });
+});
+
+// Add cat
+app.post("/cats", (req, res) => {
+    const { name, tag, descreption, img } = req.body
+    pool.getConnection((err, connection) => {
+        if (err) {
+            console.error("DB connection error:", err);
+            return res.status(500).json({ error: "DB connection error" })
+        }
+        connection.query("INSERT INTO cats (name, tag, descreption, img) VALUES (?, ?, ?, ?)", [name, tag, descreption, img], (qErr, rows) => {
+            connection.release();
+            if (qErr) {
+                console.error("Query error:", qErr);
+                return res.status(500).json({ error: "Query error" });
+            }
+            res.json(rows)
+        })
+    })
+});
+//update cat
+app.put("/cats/:id", (req, res) => {
+    const { name, tag, descreption, img } = req.body
+    pool.getConnection((err, connection) => {
+        if (err) {
+            console.error("DB connection error:", err);
+            return res.status(500).json({ error: "DB connection error" })
+        }
+        connection.query("UPDATE cats SET name = ?, tag = ?, descreption = ?, img = ? WHERE id = ?", [name, tag, descreption, img, req.params.id], (qErr, rows) => {
+            connection.release();
+            if (qErr) {
+                console.error("Query error:", qErr);
+                return res.status(500).json({ error: "Query error" });
+            }
+            res.json(rows)
+        })
+    })
+});
+
+// --- ADOPTION ROUTES ---
+
+// Adopt a cat
+app.post("/adopt/:catId", authenticateToken, (req, res) => {
+    const userId = req.user.id;
+    const catId = req.params.catId;
+
+    pool.getConnection((err, connection) => {
+        if (err) {
+            console.error("DB connection error:", err);
+            return res.status(500).json({ error: "DB connection error" });
+        }
+
+        // Check if cat exists
+        connection.query("SELECT * FROM cats WHERE id = ?", [catId], (catErr, catRows) => {
+            if (catErr) {
+                connection.release();
+                return res.status(500).json({ error: "Query error" });
+            }
+            if (catRows.length === 0) {
+                connection.release();
+                return res.status(404).json({ error: "Cat not found" });
+            }
+
+            // Insert adoption
+            connection.query(
+                "INSERT INTO adoptions (user_id, cat_id) VALUES (?, ?)",
+                [userId, catId],
+                (insertErr) => {
+                    connection.release();
+                    if (insertErr) {
+                        if (insertErr.code === 'ER_DUP_ENTRY') {
+                            return res.status(400).json({ error: "You have already adopted this cat" });
+                        }
+                        console.error("Insert error:", insertErr);
+                        return res.status(500).json({ error: "Error adopting cat" });
+                    }
+                    res.json({ message: "Cat adopted successfully!" });
+                }
+            );
+        });
+    });
+});
+
+// Remove adoption
+app.delete("/adopt/:catId", authenticateToken, (req, res) => {
+    const userId = req.user.id;
+    const catId = req.params.catId;
+
+    pool.getConnection((err, connection) => {
+        if (err) {
+            console.error("DB connection error:", err);
+            return res.status(500).json({ error: "DB connection error" });
+        }
+
+        connection.query(
+            "DELETE FROM adoptions WHERE user_id = ? AND cat_id = ?",
+            [userId, catId],
+            (deleteErr, result) => {
+                connection.release();
+                if (deleteErr) {
+                    console.error("Delete error:", deleteErr);
+                    return res.status(500).json({ error: "Error removing adoption" });
+                }
+                if (result.affectedRows === 0) {
+                    return res.status(404).json({ error: "Adoption not found" });
+                }
+                res.json({ message: "Adoption removed successfully!" });
+            }
+        );
+    });
+});
+
+// Get all adopted cats for current user
+app.get("/adoptions", authenticateToken, (req, res) => {
+    const userId = req.user.id;
+
+    pool.getConnection((err, connection) => {
+        if (err) {
+            console.error("DB connection error:", err);
+            return res.status(500).json({ error: "DB connection error" });
+        }
+
+        connection.query(
+            `SELECT cats.* FROM adoptions 
+             JOIN cats ON adoptions.cat_id = cats.id 
+             WHERE adoptions.user_id = ?
+             ORDER BY adoptions.adopted_at DESC`,
+            [userId],
+            (qErr, rows) => {
+                connection.release();
+                if (qErr) {
+                    console.error("Query error:", qErr);
+                    return res.status(500).json({ error: "Query error" });
+                }
+                res.json(rows);
+            }
+        );
+    });
+});
+
+// Get adoption count for current user
+app.get("/adoptions/count", authenticateToken, (req, res) => {
+    const userId = req.user.id;
+
+    pool.getConnection((err, connection) => {
+        if (err) {
+            console.error("DB connection error:", err);
+            return res.status(500).json({ error: "DB connection error" });
+        }
+
+        connection.query(
+            "SELECT COUNT(*) as count FROM adoptions WHERE user_id = ?",
+            [userId],
+            (qErr, rows) => {
+                connection.release();
+                if (qErr) {
+                    console.error("Query error:", qErr);
+                    return res.status(500).json({ error: "Query error" });
+                }
+                res.json({ count: rows[0].count });
+            }
+        );
+    });
+});
+
+// Get all unique tags
+app.get("/tags", (req, res) => {
+    pool.getConnection((err, connection) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ error: "DB connection error" });
+        }
+        connection.query("SELECT DISTINCT tag FROM cats WHERE tag IS NOT NULL AND tag != ''", (err, rows) => {
+            connection.release();
+            if (err) {
+                console.error(err);
+                return res.status(500).json({ error: "DB query error" });
+            }
+            // Return just an array of tag strings
+            const tags = rows.map(row => row.tag);
+            res.json(tags);
+        });
+    });
+});
+
+app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+});

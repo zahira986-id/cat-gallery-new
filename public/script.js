@@ -17,7 +17,12 @@ let adoptedCatIds = new Set(); // Track adopted cats
 
 // Initialization
 // Initialization
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // Verify session is still valid if user has token
+    if (authToken) {
+        await verifySession();
+    }
+
     // Only fetch cats if we are on the gallery page
     if (document.getElementById('gallery')) {
         fetchCats('', 1);
@@ -588,6 +593,44 @@ function showNotification(message, type) {
 let authToken = localStorage.getItem('authToken');
 let currentUser = JSON.parse(localStorage.getItem('user'));
 
+// Verify session is still valid on server
+async function verifySession() {
+    try {
+        const res = await fetch('/session', {
+            credentials: 'include' // Include cookies
+        });
+        const data = await res.json();
+
+        // If session is invalid but we have a token (cookie likely deleted manually)
+        if (!data.isAuthenticated && authToken) {
+            console.log('Session expired or invalid (cookie missing), cleaning up remote sessions...');
+
+            // Attempt to clean up sessions in DB using the JWT we still have
+            try {
+                await fetch('/cleanup-sessions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+            } catch (cleanupErr) {
+                console.error('Error cleaning up sessions:', cleanupErr);
+            }
+
+            // Clear client-side data
+            authToken = null;
+            currentUser = null;
+            adoptedCatIds.clear();
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('user');
+        }
+    } catch (err) {
+        console.error('Error verifying session:', err);
+    }
+}
+
+
 function updateAuthUI() {
     // Re-select elements to be sure
     const btnSignup = document.getElementById('btn-signup');
@@ -633,7 +676,21 @@ function updateAuthUI() {
     }
 }
 
-function logout() {
+async function logout() {
+    // Call backend to destroy session
+    try {
+        await fetch('/logout', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include' // Include cookies
+        });
+    } catch (err) {
+        console.error('Error during logout:', err);
+    }
+
+    // Clear client-side data
     authToken = null;
     currentUser = null;
     adoptedCatIds.clear();
