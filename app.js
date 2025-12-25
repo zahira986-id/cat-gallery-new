@@ -6,6 +6,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const session = require("express-session");
 const pgSession = require("connect-pg-simple")(session);
+const cookieParser = require("cookie-parser");
 
 const path = require('path');
 
@@ -16,6 +17,7 @@ const SESSION_SECRET = process.env.SESSION_SECRET || "super_secret_session_key_4
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
+app.use(cookieParser());
 app.use(express.static(path.join(__dirname, "public")));
 
 // Fallback for root if static fails (explicitly serve index.html)
@@ -59,8 +61,7 @@ app.use(session({
 
 // --- AUTHENTICATION MIDDLEWARE ---
 function authenticateToken(req, res, next) {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+    const token = req.cookies.token || (req.headers['authorization'] && req.headers['authorization'].split(' ')[1]);
 
     if (!token) {
         return res.status(401).json({ error: "Access token required" });
@@ -141,6 +142,14 @@ app.post("/login", async (req, res) => {
             JWT_SECRET,
             { expiresIn: "1h" }
         );
+        console.log("Login successful:", token);
+
+        // Set HTTP-only cookie
+        res.cookie('token', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            maxAge: 3600000 // 1 hour
+        });
 
         // Store user data in session
         req.session.userId = user.id;
@@ -164,14 +173,12 @@ app.post("/login", async (req, res) => {
 
                 res.json({
                     message: "Login successful",
-                    token,
                     user: { id: user.id, username: user.username, email: user.email }
                 });
             } catch (updateErr) {
                 console.error("Error linking session to user:", updateErr);
                 res.json({
                     message: "Login successful",
-                    token,
                     user: { id: user.id, username: user.username, email: user.email }
                 });
             }
@@ -181,6 +188,7 @@ app.post("/login", async (req, res) => {
         res.status(500).json({ error: "Error logging in" });
     }
 });
+
 
 // Cleanup Sessions
 app.post("/cleanup-sessions", authenticateToken, async (req, res) => {
@@ -204,6 +212,7 @@ app.post("/logout", (req, res) => {
                 return res.status(500).json({ error: "Failed to logout" });
             }
             res.clearCookie('connect.sid');
+            res.clearCookie('token');
             res.json({ message: "Logout successful" });
         });
     } else {

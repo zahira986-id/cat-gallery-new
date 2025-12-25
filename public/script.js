@@ -19,7 +19,7 @@ let adoptedCatIds = new Set(); // Track adopted cats
 // Initialization
 document.addEventListener('DOMContentLoaded', async () => {
     // Verify session is still valid if user has token
-    if (authToken) {
+    if (currentUser) {
         await verifySession();
     }
 
@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateAuthUI();
 
     // Load adoption data if logged in
-    if (authToken) {
+    if (currentUser) {
         fetchAdoptionCount();
         fetchAdoptedCats();
     }
@@ -250,7 +250,7 @@ function createCatCard(cat) {
                 <button class="btn btn-delete" data-id="${cat.id}">
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
-                ${authToken ? `
+                ${currentUser ? `
                     <button class="btn ${adoptedCatIds.has(cat.id) ? 'btn-adopted' : 'btn-adopt'}" data-id="${cat.id}" data-adopted="${adoptedCatIds.has(cat.id)}">
                         <i class="fas fa-heart"></i> ${adoptedCatIds.has(cat.id) ? 'Adopté' : 'Adopter'}
                     </button>
@@ -590,7 +590,6 @@ function showNotification(message, type) {
 // --- AUTHENTICATION HELPERS ---
 
 // Auth State
-let authToken = localStorage.getItem('authToken');
 let currentUser = JSON.parse(localStorage.getItem('user'));
 
 // Verify session is still valid on server
@@ -601,28 +600,10 @@ async function verifySession() {
         });
         const data = await res.json();
 
-        // If session is invalid but we have a token (cookie likely deleted manually)
-        if (!data.isAuthenticated && authToken) {
-            console.log('Session expired or invalid (cookie missing), cleaning up remote sessions...');
-
-            // Attempt to clean up sessions in DB using the JWT we still have
-            try {
-                await fetch('/cleanup-sessions', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${authToken}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-            } catch (cleanupErr) {
-                console.error('Error cleaning up sessions:', cleanupErr);
-            }
-
-            // Clear client-side data
-            authToken = null;
+        // If session is invalid, clear local user data
+        if (!data.isAuthenticated) {
             currentUser = null;
             adoptedCatIds.clear();
-            localStorage.removeItem('authToken');
             localStorage.removeItem('user');
         }
     } catch (err) {
@@ -638,7 +619,7 @@ function updateAuthUI() {
     const btnLogout = document.getElementById('btn-logout');
     const addCatBtn = document.getElementById('add-cat-btn');
 
-    if (authToken) {
+    if (currentUser) {
         // Logged In
         if (btnSignup) btnSignup.style.display = 'none';
         if (btnLogin) btnLogin.style.display = 'none';
@@ -691,10 +672,8 @@ async function logout() {
     }
 
     // Clear client-side data
-    authToken = null;
     currentUser = null;
     adoptedCatIds.clear();
-    localStorage.removeItem('authToken');
     localStorage.removeItem('user');
 
     // Reset auth forms
@@ -771,9 +750,7 @@ function setupAuthForms() {
 
                 if (res.ok) {
                     // Success
-                    authToken = result.token;
                     currentUser = result.user;
-                    localStorage.setItem('authToken', authToken);
                     localStorage.setItem('user', JSON.stringify(currentUser));
 
                     showNotification(`Welcome back, ${currentUser.username}!`, 'success');
@@ -804,11 +781,11 @@ function setupAuthForms() {
 
 // Fetch adoption count
 async function fetchAdoptionCount() {
-    if (!authToken) return;
+    if (!currentUser) return;
 
     try {
         const res = await fetch('/adoptions/count', {
-            headers: { 'Authorization': `Bearer ${authToken}` }
+            // Cookie sent automatically
         });
         const data = await res.json();
 
@@ -825,11 +802,11 @@ async function fetchAdoptionCount() {
 
 // Fetch adopted cats to build the set
 async function fetchAdoptedCats() {
-    if (!authToken) return;
+    if (!currentUser) return;
 
     try {
         const res = await fetch('/adoptions', {
-            headers: { 'Authorization': `Bearer ${authToken}` }
+            // Cookie sent automatically
         });
         const data = await res.json();
 
@@ -849,15 +826,14 @@ async function fetchAdoptedCats() {
 
 // Adopt a cat
 async function adoptCat(catId) {
-    if (!authToken) {
+    if (!currentUser) {
         showNotification('Please login to adopt cats', 'error');
         return;
     }
 
     try {
         const res = await fetch(`/adopt/${catId}`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${authToken}` }
+            method: 'POST'
         });
         const data = await res.json();
 
@@ -877,12 +853,11 @@ async function adoptCat(catId) {
 
 // Remove adoption
 async function unadoptCat(catId) {
-    if (!authToken) return;
+    if (!currentUser) return;
 
     try {
         const res = await fetch(`/adopt/${catId}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${authToken}` }
+            method: 'DELETE'
         });
         const data = await res.json();
 
@@ -902,7 +877,7 @@ async function unadoptCat(catId) {
 
 // Open modal with adopted cats list
 async function openAdoptedCatsModal() {
-    if (!authToken) return;
+    if (!currentUser) return;
 
     const modal = document.getElementById('adopted-cats-modal');
     const listContainer = document.getElementById('adopted-cats-list');
@@ -913,7 +888,7 @@ async function openAdoptedCatsModal() {
 
     try {
         const res = await fetch('/adoptions', {
-            headers: { 'Authorization': `Bearer ${authToken}` }
+            // Cookie sent automatically
         });
         const cats = await res.json();
 
