@@ -158,8 +158,8 @@ h1 {
 
 .gallery {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 30px;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 25px;
 }
 
 .card {
@@ -500,42 +500,102 @@ footer {
 }
 
 @media (max-width: 768px) {
-    .gallery {
-        grid-template-columns: 1fr;
+    .navbar {
+        flex-direction: column;
+        align-items: center;
+        /* Force center alignment */
+        justify-content: center;
+        gap: 20px;
+        padding: 20px 15px;
+        height: auto;
+        /* Allow height to grow */
+    }
+
+    .nav-brand {
+        margin-right: 0;
+        margin-bottom: 5px;
+    }
+
+    .nav-links {
+        width: 100%;
+        justify-content: center;
+        gap: 20px;
+        flex-wrap: wrap;
+    }
+
+    .user-session-info {
+        width: 100%;
+        justify-content: center;
+        margin: 0;
+    }
+
+    .nav-auth {
+        width: 100%;
+        justify-content: center;
     }
 
     h1 {
-        font-size: 2.2rem;
+        font-size: 2rem;
+        margin-top: 10px;
     }
 
     .header-actions {
         flex-direction: column;
-        align-items: center;
+        align-items: stretch;
+        gap: 15px;
+        width: 100%;
     }
+
+    .search-container {
+        width: 100%;
+        display: flex;
+        gap: 10px;
+    }
+
+    .search-input {
+        width: 100%;
+        flex-grow: 1;
+    }
+
 
     .btn {
         width: 100%;
-        max-width: 250px;
+        max-width: none;
     }
 }
 
 @media (max-width: 480px) {
     body {
-        padding: 15px;
+        padding: 10px;
+    }
+
+    .container {
+        padding: 10px;
+    }
+
+    .nav-brand {
+        font-size: 1.3rem;
+    }
+
+    .nav-links {
+        gap: 15px;
+        font-size: 0.9rem;
     }
 
     .card-header,
     .card-body {
-        padding: 20px;
+        padding: 15px;
     }
 
     .btn {
-        padding: 8px 15px;
-        font-size: 0.9rem;
+        padding: 10px 15px;
+        /* Bigger touch target */
+        font-size: 0.95rem;
     }
 
     .modal-content {
         width: 95%;
+        margin: 10px;
     }
 }
 
